@@ -62,7 +62,7 @@ impl<'arena, I: InteriorMut<'arena, Segments>> Arena<'arena, I> {
 		&self.allocator
 	}
 }
-impl<'arena> SingleThreadArena<'arena> {
+impl SingleThreadArena<'_> {
 	///Creates an empty [SingleThreadArena] to be used in a single thread.
 	#[inline(always)]
 	pub const fn new() -> Self {
@@ -78,7 +78,7 @@ impl<'arena> SingleThreadArena<'arena> {
 		}
 	}
 }
-impl<'arena> MultiThreadArena<'arena> {
+impl MultiThreadArena<'_> {
 	///Creates an empty [MultiThreadArena] which can be sent between threads. Wrap it in [std::sync::Arc] for shared access to the arena.
 	#[inline(always)]
 	pub const fn new() -> Self {
@@ -311,8 +311,8 @@ unsafe impl<'arena, I: InteriorMut<'arena, Segments>> Allocator for ArenaAlloc<'
 		Ok(NonNull::slice_from_raw_parts(ptr, old_layout.size()))
 	}
 }
-unsafe impl<'arena> Send for ArenaAlloc<'arena, Mutex<Segments>> {}
-unsafe impl<'arena> Sync for ArenaAlloc<'arena, Mutex<Segments>> {}
+unsafe impl Send for ArenaAlloc<'_, Mutex<Segments>> {}
+unsafe impl Sync for ArenaAlloc<'_, Mutex<Segments>> {}
 
 ///Linked list of [Segment] nodes used by [ArenaAllocator]. You can ignore its existence.
 pub struct Segments {
