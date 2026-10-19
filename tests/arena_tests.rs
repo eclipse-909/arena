@@ -34,7 +34,12 @@ mod arena_tests {
 
 	fn assert_aligned<T>(r: &T) {
 		let addr = (r as *const T).addr();
-		assert_eq!(addr % align_of::<T>(), 0, "{addr:#x} is not aligned to {}", align_of::<T>());
+		assert_eq!(
+			addr % align_of::<T>(),
+			0,
+			"{addr:#x} is not aligned to {}",
+			align_of::<T>()
+		);
 	}
 
 	/// Backing allocator that counts live allocations so tests can check that everything is freed.
@@ -164,7 +169,8 @@ mod arena_tests {
 		let drop_box = arena.boxed(DropStruct(&mut drop_count));
 		drop(drop_box);
 		assert_eq!(drop_count, 1);
-		/* test scope */ {
+		/* test scope */
+		{
 			let _drop_box = arena.boxed(DropStruct(&mut drop_count));
 		}
 		assert_eq!(drop_count, 2);
@@ -242,7 +248,11 @@ mod arena_tests {
 			v.push(i);
 		}
 		assert!(v.capacity() >= 64);
-		assert_eq!(v.as_ptr(), first, "growing the last allocation should extend it in place");
+		assert_eq!(
+			v.as_ptr(),
+			first,
+			"growing the last allocation should extend it in place"
+		);
 		for (i, x) in v.iter().enumerate() {
 			assert_eq!(*x, i as u64);
 		}
@@ -281,11 +291,21 @@ mod arena_tests {
 			// Shrinking the last allocation gives the tail back, leaving 0xFF bytes behind it.
 			let shrunk = arena.inner().shrink(p, big, small).unwrap().cast::<u8>();
 			assert_eq!(shrunk, p);
-			let grown = arena.inner().grow_zeroed(shrunk, small, big).unwrap().cast::<u8>();
+			let grown = arena
+				.inner()
+				.grow_zeroed(shrunk, small, big)
+				.unwrap()
+				.cast::<u8>();
 			assert_eq!(grown, p, "should grow in place");
 			let bytes = std::slice::from_raw_parts(grown.as_ptr(), 48);
-			assert!(bytes[..16].iter().all(|&b| b == 0xFF), "old contents must survive");
-			assert!(bytes[16..].iter().all(|&b| b == 0), "new tail must be zeroed");
+			assert!(
+				bytes[..16].iter().all(|&b| b == 0xFF),
+				"old contents must survive"
+			);
+			assert!(
+				bytes[16..].iter().all(|&b| b == 0),
+				"new tail must be zeroed"
+			);
 		}
 	}
 
@@ -299,7 +319,11 @@ mod arena_tests {
 		unsafe {
 			p.as_ptr().write_bytes(0xAB, 16);
 			let _other = arena.inner().allocate(Layout::new::<u64>()).unwrap();
-			let q = arena.inner().grow_zeroed(p, small, big).unwrap().cast::<u8>();
+			let q = arena
+				.inner()
+				.grow_zeroed(p, small, big)
+				.unwrap()
+				.cast::<u8>();
 			assert_ne!(q, p);
 			let bytes = std::slice::from_raw_parts(q.as_ptr(), 48);
 			assert!(bytes[..16].iter().all(|&b| b == 0xAB));
@@ -420,7 +444,8 @@ mod arena_tests {
 	#[test]
 	fn test_clear_reuses_memory() {
 		let mut arena = Arena::new();
-		/* fill several segments */ {
+		/* fill several segments */
+		{
 			let mut v = arena.vec::<u64>();
 			for i in 0..10_000 {
 				v.push(i);
@@ -431,7 +456,10 @@ mod arena_tests {
 		let first: *const u64 = arena.alloc(1u64);
 		arena.clear();
 		let second: *const u64 = arena.alloc(2u64);
-		assert_eq!(first, second, "clear should restart at the retained segment");
+		assert_eq!(
+			first, second,
+			"clear should restart at the retained segment"
+		);
 
 		// Fully usable after clear.
 		let mut v = arena.vec::<u64>();
@@ -462,7 +490,11 @@ mod arena_tests {
 			assert_eq!(v.len(), 10_000);
 			assert!(backing.live() > 1, "expected several segments");
 		}
-		assert_eq!(backing.live(), 0, "all segments must be returned to the backing allocator");
+		assert_eq!(
+			backing.live(),
+			0,
+			"all segments must be returned to the backing allocator"
+		);
 	}
 
 	#[test]
@@ -475,7 +507,10 @@ mod arena_tests {
 		let before = backing.live();
 		arena.clear();
 		let after = backing.live();
-		assert!(after < before, "clear should free all but one segment ({before} -> {after})");
+		assert!(
+			after < before,
+			"clear should free all but one segment ({before} -> {after})"
+		);
 		assert!(after >= 1);
 		drop(arena);
 		assert_eq!(backing.live(), 0);

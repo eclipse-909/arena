@@ -1,7 +1,4 @@
-#![feature(
-	allocator_ext,
-	slice_ptr_get,
-)]
+#![feature(allocator_ext, slice_ptr_get)]
 
 use std::{
 	alloc::{AllocError, Allocator, Global, Layout},
@@ -11,7 +8,7 @@ use std::{
 
 const SEG_ALIGN: usize = 16;
 const MAX_GROWTH: usize = 1 << 20;
-pub const PAGE_SIZE: usize = 4096;
+const PAGE_SIZE: usize = 4096;
 
 /// Arena allocator which grows dynamically as you allocate more to it.
 /// All memory is freed when the Arena is dropped or cleared.
@@ -83,7 +80,10 @@ impl<'backing, BackingAlloc: Allocator> Arena<'backing, BackingAlloc> {
 
 	/// Returns an empty Vec with initial capacity whose lifetime is the same as the arena that contains its elements.
 	/// Capacity is the number of elements, not the number of bytes.
-	pub fn vec_with_capacity<T>(&self, capacity: usize) -> Vec<T, &ArenaAlloc<'backing, BackingAlloc>> {
+	pub fn vec_with_capacity<T>(
+		&self,
+		capacity: usize,
+	) -> Vec<T, &ArenaAlloc<'backing, BackingAlloc>> {
 		Vec::with_capacity_in(capacity, &self.0)
 	}
 
@@ -134,7 +134,10 @@ struct ArenaSegment {
 }
 
 impl ArenaSegment {
-	fn new_in<BackingAlloc: Allocator>(layout: Layout, backing: BackingAlloc) -> Result<Self, AllocError> {
+	fn new_in<BackingAlloc: Allocator>(
+		layout: Layout,
+		backing: BackingAlloc,
+	) -> Result<Self, AllocError> {
 		let ptr = backing.allocate(layout)?.cast::<u8>();
 		Ok(Self { ptr, layout })
 	}
@@ -143,7 +146,10 @@ impl ArenaSegment {
 /// Computes the layout of a new segment that can hold a request of `size`/`align`.
 /// Grows geometrically from the previous segment and rounds up to whole pages.
 fn new_segment_layout(size: usize, align: usize, min_len: usize) -> Result<Layout, AllocError> {
-	let len = size.max(min_len).checked_next_multiple_of(PAGE_SIZE).ok_or(AllocError)?;
+	let len = size
+		.max(min_len)
+		.checked_next_multiple_of(PAGE_SIZE)
+		.ok_or(AllocError)?;
 	Layout::from_size_align(len, SEG_ALIGN.max(align)).map_err(|_| AllocError)
 }
 
@@ -214,7 +220,8 @@ impl<'backing, BackingAlloc: Allocator> ArenaAlloc<'backing, BackingAlloc> {
 		// Oversized request, and there's a tail worth keeping: dedicated segment, bump pointer untouched.
 		if !segments.is_empty() && size > next_len / 2 {
 			let len = size.checked_next_multiple_of(PAGE_SIZE).ok_or(AllocError)?;
-			let layout = Layout::from_size_align(len, SEG_ALIGN.max(align)).map_err(|_| AllocError)?;
+			let layout =
+				Layout::from_size_align(len, SEG_ALIGN.max(align)).map_err(|_| AllocError)?;
 			let seg = ArenaSegment::new_in(layout, self.backing)?;
 			let p = seg.ptr;
 			let tail = segments.len() - 1;
@@ -267,7 +274,12 @@ unsafe impl<'backing, BackingAlloc: Allocator> Allocator for ArenaAlloc<'backing
 	/// if this was the last thing allocated
 	/// and there's enough space in the arena.
 	/// Otherwise, this creates a new allocation and copies the memory over.
-	unsafe fn grow(&self, ptr: NonNull<u8>, old_layout: Layout, new_layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
+	unsafe fn grow(
+		&self,
+		ptr: NonNull<u8>,
+		old_layout: Layout,
+		new_layout: Layout,
+	) -> Result<NonNull<[u8]>, AllocError> {
 		let old_size = old_layout.size();
 		let new_size = new_layout.size();
 		debug_assert!(
@@ -324,7 +336,12 @@ unsafe impl<'backing, BackingAlloc: Allocator> Allocator for ArenaAlloc<'backing
 	}
 
 	/// If this was the last allocation, gives the freed tail back to the arena.
-	unsafe fn shrink(&self, ptr: NonNull<u8>, old_layout: Layout, new_layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
+	unsafe fn shrink(
+		&self,
+		ptr: NonNull<u8>,
+		old_layout: Layout,
+		new_layout: Layout,
+	) -> Result<NonNull<[u8]>, AllocError> {
 		let old_size = old_layout.size();
 		let new_size = new_layout.size();
 		debug_assert!(new_size <= old_size);
@@ -357,16 +374,15 @@ impl<'backing, BackingAlloc: Allocator> Drop for ArenaAlloc<'backing, BackingAll
 
 #[cfg(test)]
 mod tests {
-	use {
-		super::*,
-		crate::PAGE_SIZE,
-	};
+	use {super::*, crate::PAGE_SIZE};
 
 	/// `(base address, length)` of every segment, in `Vec` order (the bump segment is last).
 	fn segments<A: Allocator>(arena: &Arena<'_, A>) -> Vec<(usize, usize)> {
 		// SAFETY: tests are single-threaded and no `&mut` to the Vec is live here.
 		let segs = unsafe { &*arena.0.segments.get() };
-		segs.iter().map(|s| (s.ptr.as_ptr().addr(), s.layout.size())).collect()
+		segs.iter()
+			.map(|s| (s.ptr.as_ptr().addr(), s.layout.size()))
+			.collect()
 	}
 
 	fn cursor<A: Allocator>(arena: &Arena<'_, A>) -> usize {
@@ -395,7 +411,10 @@ mod tests {
 			assert_eq!(w[1], w[0].min(MAX_GROWTH) * 2, "sizes: {sizes:?}");
 		}
 		let capped = sizes.iter().filter(|&&s| s == 2 * MAX_GROWTH).count();
-		assert!(capped >= 2, "doubling should stop at 2 * MAX_GROWTH: {sizes:?}");
+		assert!(
+			capped >= 2,
+			"doubling should stop at 2 * MAX_GROWTH: {sizes:?}"
+		);
 	}
 
 	#[test]
@@ -407,7 +426,11 @@ mod tests {
 		arena.alloc(1u8);
 		let sizes: Vec<usize> = segments(&arena).iter().map(|s| s.1).collect();
 		assert_eq!(sizes.len(), 2);
-		assert_eq!(sizes[1], 2 * MAX_GROWTH, "next segment must not be sized from the huge one");
+		assert_eq!(
+			sizes[1],
+			2 * MAX_GROWTH,
+			"next segment must not be sized from the huge one"
+		);
 	}
 
 	#[test]
@@ -420,12 +443,21 @@ mod tests {
 
 		let segs = segments(&arena);
 		assert_eq!(segs.len(), 2);
-		assert!(segs[0].1 >= 1 << 20, "dedicated segment goes before the tail");
-		assert_eq!(segs[1].1, PAGE_SIZE, "bump segment stays last and untouched");
+		assert!(
+			segs[0].1 >= 1 << 20,
+			"dedicated segment goes before the tail"
+		);
+		assert_eq!(
+			segs[1].1, PAGE_SIZE,
+			"bump segment stays last and untouched"
+		);
 
 		let (base, len) = segs[1];
 		for p in [a, b] {
-			assert!((base..base + len).contains(&p.addr()), "small allocations stay in the tail");
+			assert!(
+				(base..base + len).contains(&p.addr()),
+				"small allocations stay in the tail"
+			);
 		}
 		// SAFETY: same segment
 		assert_eq!(b, unsafe { a.add(1) });
@@ -443,11 +475,27 @@ mod tests {
 
 		arena.clear();
 
-		assert_eq!(segments(&arena), vec![tail], "only the tail segment should remain");
-		assert_eq!(cursor(&arena), tail.0, "cursor should point at the retained segment's base");
+		assert_eq!(
+			segments(&arena),
+			vec![tail],
+			"only the tail segment should remain"
+		);
+		assert_eq!(
+			cursor(&arena),
+			tail.0,
+			"cursor should point at the retained segment's base"
+		);
 		let first: *const u64 = arena.alloc(5u64);
-		assert_eq!(first.addr(), tail.0, "first allocation after clear lands at the retained base");
-		assert_eq!(segments(&arena).len(), 1, "no new segment should have been needed");
+		assert_eq!(
+			first.addr(),
+			tail.0,
+			"first allocation after clear lands at the retained base"
+		);
+		assert_eq!(
+			segments(&arena).len(),
+			1,
+			"no new segment should have been needed"
+		);
 	}
 
 	#[test]
