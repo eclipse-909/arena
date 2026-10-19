@@ -16,45 +16,34 @@ I'm sure I could have found something I liked, but I also wanted to learn how to
 be a better software developer.
 ___
 ## The Solution
-I made two implementations of an arena:
-
-**SingleThreadArena** is an Arena that can only be used in a single-threaded environment.  
-**MultiThreadArena** is an Arena that can be used in a multithreaded environment.
+**Arena**  
+An untyped arena allocator that works with the allocator api and Standard types like Box and Vec.
 ___
 ## Features
 * Simple interface for creating an arena and allocating with it
 * Can allocate any Sized data type
-* Can allocate Box, Vec, and other standard library smart pointers (with nightly compiler and
-```allocator_api``` feature)
+* Can allocate Box, Vec, and other standard library smart pointers
 * All allocated objects are borrow-checked, and won't compile if they live longer than the arena
-* drop is called on all allocated objects when the arena is dropped
-* MultiThreadArena itself can be shared between threads
-* Allocated objects can be shared between threads (only if allocated with MultiThreadArena, and if
-the arena has a ```'static``` lifetime)
-* MultiThreadArena is locked by Mutex when allocations are made, but allocated objects can be
-dereferenced at any time without a Mutex (unless the object itself is shared between threads)
+* drop is called on all smart pointer objects when they are dropped
+* Can pass a backing allocator (default is Global)
 ___
 ## How to Use
-The Arena struct uses generics to break these two down into two different types, so you can
-specify which one you want at compile-time. They work exactly the same, except you can wrap
-MultiThreadArena in std::sync::Arc to share it between threads.
-```Rust
-use arena::{SingleThreadArena, MultiThreadArena};
-use std::sync::Arc;
+```rs
+use arena::{Arena};
 
 fn main() {
-    let st_arena = SingleThreadArena::new();
-    let mt_arena = Arc::new(MultiThreadArena::new());
+    let arena = Arena::new();
+    let num1: &mut i32 = arena.alloc(3);
+    let num2: Box<i32> = arena.boxed(3);
 }
 ```
 ___
-The basic use case is to allocate something, and you get a mutable reference to that thing whose
-lifetime is that of the arena.
-```Rust
-use arena::SingleThreadArena;
+One use case is to allocate something that implements Copy, and you get a mutable reference to that thing.
+```rs
+use arena::Arena;
 
 fn main() {
-    let arena = SingleThreadArena::new();
+    let arena = Arena::new();
     let num: &mut i32 = arena.alloc(5);
     *num = 6;
     // arena is dropped here, so num is freed
@@ -62,29 +51,36 @@ fn main() {
 ```
 ___
 You can also use it with Rust's types and data structures in the standard library. However,
-these features are unstable. You need the nightly compiler, and you need the allocator_api
+some smart pointers are unstable. You need the nightly compiler, and you need the allocator_ext
 feature.
-```Rust
-#![feature(allocator_api)]
-use arena::{SingleThreadArena, SingleThreadArenaAlloc};
+```rs
+use arena::{Arena};
 
 fn main() {
-    let arena = SingleThreadArena::new();
-    let mut vec: Vec<i32, &SingleThreadArenaAlloc> = Vec::new_in(arena.allocator());
+    let arena = Arena::new();
+    let mut vec = arena.vec();
     vec.push(5);
     vec.push(6);
-    // arena is dropped here, so vec is freed
+    // arena is dropped here, so vec memory is freed
 }
 ```
-Most data types that let you use your own allocator should have a new_in function. You'll notice
-that we pass in ```arena.allocator()```, which must be done because the Arena struct itself
+Most data types that let you use your own allocator should have a new_in function. You can pass in `arena.inner()` because the Arena struct itself
 doesn't implement the Allocator trait, but wraps ArenaAlloc which does.
+```rs
+use arena::{Arena};
 
-If you want to specify the type for vec, you must provide a second generic argument which will
-be ```&SingleThreadArenaAlloc``` or ```&MultiThreadArenaAlloc```.
+fn main() {
+    let arena = Arena::new();
+    let mut vec = Vec::new_in(arena.inner());
+    vec.push(5);
+    vec.push(6);
+    // arena is dropped here, so vec memory is freed
+}
+```
+
 ___
 ## Examples
-See the test functions at the bottom of lib.rs.
+See tests in lib.rs and /tests.
 ___
 ## Considerations
 This library uses unsafe code. I was pretty careful to make sure there were no memory-related

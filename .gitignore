@@ -1,3 +1,4 @@
-/.idea
-/target
-/.git
+.git
+.idea
+.zed
+target

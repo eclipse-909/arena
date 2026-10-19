@@ -1,0 +1,12 @@
+error[E0597]: `arena` does not live long enough
+  --> tests/comp_err/arena_vec_outlives.rs:7:15
+   |
+ 5 |     let v = {
+   |         - borrow later stored here
+ 6 |         let arena = Arena::new();
+   |             ----- binding `arena` declared here
+ 7 |         let mut v = arena.vec::<i32>();
+   |                     ^^^^^ borrowed value does not live long enough
+...
+10 |     };
+   |     - `arena` dropped here while still borrowed

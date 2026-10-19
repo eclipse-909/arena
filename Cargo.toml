@@ -3,6 +3,7 @@ name = "arena"
 version = "0.1.0"
 edition = "2021"
 authors = ["Ethan Morton"]
-description = "This library provides 2 arena allocators - one for single-threaded use, and one for multithreaded use."
+description = "This library provides an untyped arena allocator"
 
-# No dependencies :)
+[dev-dependencies]
+trybuild = "1.0.122"
